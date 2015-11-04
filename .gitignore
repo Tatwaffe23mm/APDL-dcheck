@@ -1,0 +1,8 @@
+APDL-dcheck.spec
+build/APDL-dcheck/out00-PYZ.toc
+*.pyz
+build/APDL-dcheck/out00-Analysis.toc
+build/APDL-dcheck/out00-PKG.pkg
+build/APDL-dcheck/warnAPDL-dcheck.txt
+build/APDL-dcheck/out00-PKG.toc
+build/APDL-dcheck/out00-EXE.toc
