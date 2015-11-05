@@ -58,18 +58,18 @@ def searchFileForFileCalls(wd, fi, d, ds):
                 if rmatches != None:
                     if verbose:
                         print('\t%s' % (line))
-                    line = line.split('!') #Clean line from comments at the end
+                    line = line.split('!')  # Clean line from comments at the end
                     line = line[0]
-                    line = line.replace(' ','') #Remove spaces
-                    phm = line.split(',') #split command line into command block and arguments
-                    cmd = phm[0]
+                    line = line.replace(' ', '')  # Remove spaces
+                    line = line.split(',')  # split command line into command block and arguments
+                    cmd  = line[0]
                     if cmd.lower() == '/input':
-                        if phm[2].strip() != '':
-                            fn = phm[1] + '.' +  phm[2].strip()
+                        if line[2].strip() != '':
+                            fn = line[1] + '.' +  line[2].strip()
                         else:
-                            fn = phm[1]
+                            fn = line[1]
                     else:
-                        fn = phm[1]
+                        fn = line[1]
                     rp = re.compile(r'%\w*%')   #check for substitutions
                     o = rp.findall(fn)
                     
@@ -78,7 +78,6 @@ def searchFileForFileCalls(wd, fi, d, ds):
                         for e in o:
                             rs = re.compile(r'\w+')
                             subs = rs.findall(e)
-                            rr = re.compile(r'%\w*%')
                             if d.get(subs[0]) == None:
                                 if verbose:
                                     print('Look for substitution of ' + subs[0])
@@ -112,9 +111,9 @@ def searchFileForFileCalls(wd, fi, d, ds):
                     print('\t' + fp )
                 #Recursively search the files found 
                 out = searchFileForFileCalls(wd, fc, d, ds)
-                
             else:
                 print('No file calls found in file ' + fp)
+                
         except FileNotFoundError:
             print('ERROR: File Not found, check file name of ' + fp )
             if ds.get('fnf') == None:
