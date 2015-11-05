@@ -8,7 +8,7 @@ import argparse
 
 def makeVariableDict(fn, d):
     fs = open(fn, 'r')
-    if verbose:
+    if verbose and check == False:
         print('Make dict for: ' + fn)
     rx = re.compile(r'\w=[\'\w]+', re.IGNORECASE)
     lc = 0
@@ -40,14 +40,15 @@ def searchFileForFileCalls(wd, fi, d, ds):
         #build a normalized path
         fp = os.path.join(wd, f.replace(' ', ''))
         fp = os.path.normpath(fp)
-        print('\n> Search file ' + fp )
+        if check == False:
+            print('\n> Search file ' + fp )
         fc = [] #empty list
         #open the file and get a file handle
         try:
             fo = open(fp, 'r')
             d = makeVariableDict(fp, d)
             regex = re.compile(r'(/input|\*use)', re.IGNORECASE) #search term for file calls, looks for /input and *use commands
-            if verbose:
+            if verbose and check == False:
                 print('\tMatching lines in file:')        
             #for each line in the file
             for line in fo:
@@ -57,7 +58,7 @@ def searchFileForFileCalls(wd, fi, d, ds):
                 #for each found match
 
                 if rmatches != None:
-                    if verbose:
+                    if verbose and check == False:
                         print('\t%s' % (line))
                     line = line.split('!')  # Clean line from comments at the end
                     line = line[0]
@@ -80,7 +81,7 @@ def searchFileForFileCalls(wd, fi, d, ds):
                             rs = re.compile(r'\w+')
                             subs = rs.findall(e)
                             if d.get(subs[0]) == None:
-                                if verbose:
+                                if verbose and check == False:
                                     print('Look for substitution of ' + subs[0])
                                 #try to find the substitution in files already listed
                                 for af in fc:
@@ -105,18 +106,22 @@ def searchFileForFileCalls(wd, fi, d, ds):
             #Recursively search the files found 
             if len(fc)>0:
                 fc = unique(fc)
-                print('\tFound file calls (uniquified list):')
+                if check==False:
+                    print('\tFound file calls (uniquified list):')
                 for e in fc:
                     fp = os.path.join(wd, e.strip())
                     fp = os.path.normpath(fp)
-                    print('\t' + fp )
+                    if check==False:
+                        print('\t' + fp )
                 #Recursively search the files found 
                 out = searchFileForFileCalls(wd, fc, d, ds)
             else:
-                print('No file calls found in file ' + fp)
+                if check==False:
+                    print('No file calls found in file ' + fp)
                 
         except FileNotFoundError:
-            print('ERROR: File Not found, check file name of ' + fp )
+            if check==False:
+                print('ERROR: File Not found, check file name of ' + fp )
             if ds.get('fnf') == None:
                 ds['fnf'] = []
             ds['fnf'].append(fp)
@@ -149,7 +154,7 @@ def printItems(fid, ds, key):
                 open(ftn, 'r')
             except FileNotFoundError:
                 fid.write('<icon BUILTIN="closed"/>')            
-                
+            
             printItems(fid, ds, e)
             fid.write( '</node>')               
 
@@ -157,13 +162,14 @@ def writeFreeMindXMLFile(fout, ds, fn):
     fn = os.path.basename(fn)
     with open(fout, 'wt') as fid:
         fid.write( '<map version="1.0.1">')
-        fid.write('<node TEXT="' + fn + '">')            
-        printItems(fid, ds, fn)
+        fid.write('<node TEXT="' + fn + '">')     
+        if check==False:       
+            printItems(fid, ds, fn)
         fid.write( '</node>')                
              
         fid.write( '</map>')                   
         fid.close()
-        if verbose:
+        if verbose and check == False:
             if fid.closed:
                 print('File ' + fout + ' written.')
             else:
@@ -185,7 +191,8 @@ def main():
     parser.add_argument('file', type=argparse.FileType('r'),  help='Input file')
     parser.add_argument('-xml', action='store_true', help='write a FreeMind XML-file as output (default: file.mm)')
     parser.add_argument('outfile', nargs='?', help='Name of the output file')
-    parser.add_argument('-V','--version', action='version', version='%(prog)s 1.0')
+    parser.add_argument('-c','--check', action='store_true', help='Check only whether all dependcies exist. Returns true (1) if all dependenies exist, otherwise the check fails (0). this option supresses all other output')
+    parser.add_argument('-V','--version', action='version', version='%(prog)s 1.1')
     args = parser.parse_args()
     
  
@@ -206,24 +213,33 @@ def main():
             
         if args.outfile:
             fout = os.path.join(wd, args.outfile)
+        
+    global check    
+    check  = args.check
 
+    status = True #Set the default return value of the script
     
     d = dict()  #Variable dictionary
     ds=  dict() #File call dictionary
     ds[fn] = dict() #First key of the dict.
 
-    if verbose:
+    if verbose and check == False:
         print('List file dependencies for: ' + os.path.abspath(args.file.name))      
 
     #Call a recursion function which descends through all called files 
     d = makeVariableDict(args.file.name, d)
     ds = searchFileForFileCalls(wd, [fn], d, ds)
     if ds.get('fnf') != None:
-        print('\nFiles called by other files, but not exisiting:')
-        for i in ds['fnf']:
-            print('\t ' + i + ' not found!')    
+        status = False #Overwirte the return value, if some dependencies did not exist
+        if check == False:
+            print('\nFiles called by other files, but not exisiting:')
+            for i in ds['fnf']:
+                print('\t ' + i + ' not found!')    
     if args.outfile or args.xml:    
         writeFreeMindXMLFile(fout, ds, args.file.name)
+        
+    if check == True:
+        sys.stdout.write('%i' % (status))
 
 #Main function call to start the program
 if __name__ == "__main__":
