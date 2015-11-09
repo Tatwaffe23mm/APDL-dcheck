@@ -1,5 +1,5 @@
 # APDL-dcheck
-APDL Dependency checker
+A tool to check the dependencies of [ANSYS (R) APDL](http://ansys.com) APDL script files.
 
 ## What can APDL-dcheck do for you?
 
