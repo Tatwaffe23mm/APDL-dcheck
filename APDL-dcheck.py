@@ -7,6 +7,7 @@ import xml.dom.minidom
 import argparse
 
 def makeVariableDict(fn, d):
+    fn = os.path.abspath(fn)
     fs = open(fn, 'r')
     if verbose and check == False:
         print('Make dict for: ' + fn)
@@ -32,99 +33,133 @@ def makeVariableDict(fn, d):
                     d[key] = value.replace('\'','')                                        
     return d
 
+def parseBatchFile(wd, fi, d, ds):
+    fp = os.path.join(wd, fi.replace(' ', ''))
+    fp = os.path.normpath(fp)
+    fo = open(fp, 'r')
+    r = re.compile('-i')
+    fl = []
+    for line in fo:
+        match = r.search(line)
+        if match != None:
+            line = line.split('-i')[1]
+            line = line.strip()
+            fn = line.split(' ')[0]
+            if ds.get(fi) == None:
+                ds[fi] = dict()
+            
+            fl.append(fn)
+            ds[fi] = unique(fl)
+    return ds
 
+def parseMacFile(wd, fi, d, ds):
+    fc = []
+    try:
+        fp = os.path.abspath(os.path.join(wd, fi.strip()))
+        fo = open(fp, 'r')
+        d = makeVariableDict(fp, d)
+        regex = re.compile(r'(/input|\*use)', re.IGNORECASE) #search term for file calls, looks for /input and *use commands
+        if verbose and check == False:
+            print('\tMatching lines in file:')        
+        #for each line in the file
+        for line in fo:
+            #check whether it contains a file call
+            line = line.strip() #Remove trailing whitespaces from line
+            rmatches = regex.match(line)
+            #for each found match
+
+            if rmatches != None:
+                if verbose and check == False:
+                    print('\t%s' % (line))
+                line = line.split('!')  # Clean line from comments at the end
+                line = line[0]
+                line = line.replace(' ', '')  # Remove spaces
+                line = line.split(',')  # split command line into command block and arguments
+                cmd  = line[0]
+                if cmd.lower() == '/input':
+                    if line[2].strip() != '':
+                        fn = line[1] + '.' +  line[2].strip()
+                    else:
+                        fn = line[1]
+                else:
+                    fn = line[1]
+                rp = re.compile(r'%\w*%')   #check for substitutions
+                o = rp.findall(fn)
+                
+                #in case there are substitutions in the command, try to replace them by known variables in the variable dictionary
+                if o != None:           
+                    for e in o:
+                        rs = re.compile(r'\w+')
+                        subs = rs.findall(e)
+                        if d.get(subs[0]) == None:
+                            if verbose and check == False:
+                                print('Look for substitution of ' + subs[0])
+                            #try to find the substitution in files already listed
+                            for af in fc:
+                                afp = os.path.join(wd, af.replace(' ', ''))
+                                afp = os.path.normpath(afp)
+                                d = makeVariableDict(afp, d) #Extend the substitution dictionary by searching the files called by the file
+                            d[subs[0]] = sv
+                    
+                    ff = fn
+                    for e in o:
+                        rr = re.compile(r'' + e + '')
+                        e  = e.strip('%')
+                        sv = d[e] 
+                        ff = rr.sub(sv, ff)     
+                        if ds.get(fi) == None:
+                            ds[fi] = dict()
+                            
+                fc.append( ff)
+                
+            ds[fi] = unique(fc)
+            
+        #Recursively search the files found 
+        if len(fc)>0:
+            fc = unique(fc)
+            if check==False:
+                print('\tFound file calls (unified list):')
+            for e in fc:
+                fp = os.path.join(wd, e.strip())
+                fp = os.path.normpath(fp)
+                if check==False:
+                    print('\t' + fp )
+            #Recursively search the files found 
+            out = searchFileForFileCalls(wd, fc, d, ds)
+        else:
+            if check==False:
+                print('No file calls found in file ' + fp)
+        
+    except FileNotFoundError:
+        if check==False:
+            print('ERROR: File Not found, check file name of ' + fp )
+        if ds.get('fnf') == None:
+            ds['fnf'] = []
+        ds['fnf'].append(fp)
+    
+    return ds
 
 #Recursion function to read files and look for file calls
 def searchFileForFileCalls(wd, fi, d, ds):
+    if type(fi) == type(str()):
+        fn = fi
+        fi = []
+        fi.append(fn)
     for f in fi:
+        ext = (os.path.basename(f)).split('.')[1]
         #build a normalized path
         fp = os.path.join(wd, f.replace(' ', ''))
         fp = os.path.normpath(fp)
         if check == False:
             print('\n> Search file ' + fp )
         fc = [] #empty list
-        #open the file and get a file handle
-        try:
-            fo = open(fp, 'r')
-            d = makeVariableDict(fp, d)
-            regex = re.compile(r'(/input|\*use)', re.IGNORECASE) #search term for file calls, looks for /input and *use commands
-            if verbose and check == False:
-                print('\tMatching lines in file:')        
-            #for each line in the file
-            for line in fo:
-                #check whether it contains a file call
-                line = line.strip() #Remove trailing whitespaces from line
-                rmatches = regex.match(line)
-                #for each found match
-
-                if rmatches != None:
-                    if verbose and check == False:
-                        print('\t%s' % (line))
-                    line = line.split('!')  # Clean line from comments at the end
-                    line = line[0]
-                    line = line.replace(' ', '')  # Remove spaces
-                    line = line.split(',')  # split command line into command block and arguments
-                    cmd  = line[0]
-                    if cmd.lower() == '/input':
-                        if line[2].strip() != '':
-                            fn = line[1] + '.' +  line[2].strip()
-                        else:
-                            fn = line[1]
-                    else:
-                        fn = line[1]
-                    rp = re.compile(r'%\w*%')   #check for substitutions
-                    o = rp.findall(fn)
-                    
-                    #in case there are substitutions in the command, try to replace them by known variables in the variable dictionary
-                    if o != None:           
-                        for e in o:
-                            rs = re.compile(r'\w+')
-                            subs = rs.findall(e)
-                            if d.get(subs[0]) == None:
-                                if verbose and check == False:
-                                    print('Look for substitution of ' + subs[0])
-                                #try to find the substitution in files already listed
-                                for af in fc:
-                                    afp = os.path.join(wd, af.replace(' ', ''))
-                                    afp = os.path.normpath(afp)
-                                    d = makeVariableDict(afp, d) #Extend the substitution dictionary by searching the files called by the file
-                                d[subs[0]] = sv
-                        
-                        ff = fn
-                        for e in o:
-                            rr = re.compile(r'' + e + '')
-                            e  = e.strip('%')
-                            sv = d[e] 
-                            ff = rr.sub(sv, ff)     
-                            if ds.get(f) == None:
-                                ds[f] = dict()
-                                
-                    fc.append( ff)
-                    
-                ds[f] = unique(fc)
-                
-            #Recursively search the files found 
-            if len(fc)>0:
-                fc = unique(fc)
-                if check==False:
-                    print('\tFound file calls (uniquified list):')
-                for e in fc:
-                    fp = os.path.join(wd, e.strip())
-                    fp = os.path.normpath(fp)
-                    if check==False:
-                        print('\t' + fp )
-                #Recursively search the files found 
-                out = searchFileForFileCalls(wd, fc, d, ds)
-            else:
-                if check==False:
-                    print('No file calls found in file ' + fp)
-                
-        except FileNotFoundError:
-            if check==False:
-                print('ERROR: File Not found, check file name of ' + fp )
-            if ds.get('fnf') == None:
-                ds['fnf'] = []
-            ds['fnf'].append(fp)
+        if ext == 'bat' or ext == 'sh':
+            ds = parseBatchFile(wd, f, d, ds)
+            out = searchFileForFileCalls(wd, ds[f], d, ds)
+        else:
+            #open the file and get a file handle
+           out = parseMacFile(wd, f, d, ds)
+           #out = searchFileForFileCalls(wd, fc, d, ds)
     return ds
 
 def unique(seq, idfun=None): 
